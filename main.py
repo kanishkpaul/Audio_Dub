@@ -325,54 +325,6 @@ def mix_audio_tracks(tracks: List[np.ndarray]) -> np.ndarray:
     return mixed
 
 
-def chunk_segments(segments: List[Dict], max_chars: int = 150) -> List[Dict]:
-    import re
-    chunked = []
-    for seg in segments:
-        text = seg.get("text", "")
-        dur = seg["end"] - seg["start"]
-        
-        if len(text) > max_chars and dur > 15.0:
-            parts = [p.strip() for p in re.split(r'([.?!。？！]+)', text) if p.strip()]
-            sentences = []
-            for i in range(0, len(parts), 2):
-                sent = parts[i]
-                if i + 1 < len(parts):
-                    sent += parts[i+1]
-                if sent:
-                    sentences.append(sent)
-            if not sentences:
-                sentences = [text]
-            
-            groups = []
-            current_group = ""
-            for s in sentences:
-                if len(current_group) + len(s) > max_chars and current_group:
-                    groups.append(current_group.strip())
-                    current_group = s
-                else:
-                    current_group += (" " + s) if current_group else s
-            if current_group:
-                groups.append(current_group.strip())
-                
-            total_chars = sum(len(g) for g in groups)
-            current_start = seg["start"]
-            for g in groups:
-                char_len = len(g)
-                if char_len == 0: continue
-                g_dur = dur * (char_len / total_chars)
-                chunked.append({
-                    "start": current_start,
-                    "end": current_start + g_dur,
-                    "text": g,
-                    "language": seg.get("language", "en")
-                })
-                current_start += g_dur
-        else:
-            chunked.append(seg)
-    return chunked
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Movie dubbing pipeline")
     parser.add_argument("--input-audio", required=True, help="Path to input mp3 or wav")
@@ -505,8 +457,6 @@ def main() -> None:
             save_json(asr_cache, result)
 
         segments = result.get("segments", [])
-        segments = chunk_segments(segments)
-        
         if not segments:
             continue
 
