@@ -1,7 +1,11 @@
 import argparse
 import json
 import os
+import subprocess
+import tempfile
+import uuid
 import time
+import soundfile as sf
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -28,16 +32,134 @@ DEFAULT_SR = 16000
 DEFAULT_CACHE_DIR = "cache"
 
 
+def _stretch_silences_ffmpeg(audio: np.ndarray, sr: int, target_seconds: float) -> np.ndarray:
+    tmp_dir = tempfile.gettempdir()
+    unique_id = uuid.uuid4().hex
+    in_path = os.path.join(tmp_dir, f"in_{unique_id}.wav")
+    out_path = os.path.join(tmp_dir, f"out_{unique_id}.wav")
+    
+    sf.write(in_path, audio, sr)
+    
+    try:
+        silence_result = subprocess.run([
+            "ffmpeg", "-i", in_path,
+            "-af", "silencedetect=noise=-30dB:d=0.05",
+            "-f", "null", "-"
+        ], capture_output=True, text=True)
+
+        silence_events = []
+        for line in silence_result.stderr.splitlines():
+            if "silence_start" in line:
+                silence_events.append(("start", float(line.split("silence_start: ")[1])))
+            elif "silence_end" in line:
+                t = float(line.split("silence_end: ")[1].split(" ")[0])
+                silence_events.append(("end", t))
+
+        total_dur = len(audio) / sr
+        segments = []
+        cursor = 0.0
+        i = 0
+        while i < len(silence_events):
+            if silence_events[i][0] == "start":
+                s_start = silence_events[i][1]
+                if i + 1 < len(silence_events) and silence_events[i+1][0] == "end":
+                    s_end = silence_events[i + 1][1]
+                    i += 2
+                else:
+                    s_end = total_dur
+                    i += 1
+                
+                if s_start > cursor:
+                    segments.append((cursor, s_start, False))
+                segments.append((s_start, s_end, True))
+                cursor = s_end
+            else:
+                i += 1
+                
+        if cursor < total_dur:
+            segments.append((cursor, total_dur, False))
+
+        speech_dur = sum(e - s for s, e, sil in segments if not sil)
+        pause_dur  = sum(e - s for s, e, sil in segments if sil)
+
+        if pause_dur == 0:
+            raise ValueError("No silence/pauses detected.")
+        if target_seconds < speech_dur:
+            raise ValueError(f"Target {target_seconds}s < speech {speech_dur:.2f}s.")
+
+        pause_scale = (target_seconds - speech_dur) / pause_dur
+
+        parts = []
+        concat_file = os.path.join(tmp_dir, f"concat_{unique_id}.txt")
+        try:
+            for idx, (start, end, is_silence) in enumerate(segments):
+                part = os.path.join(tmp_dir, f"part_{unique_id}_{idx}.wav")
+                dur = end - start
+                if is_silence:
+                    new_dur = dur * pause_scale
+                    subprocess.run([
+                        "ffmpeg", "-y", "-f", "lavfi",
+                        "-i", f"anullsrc=r={sr}:cl=mono",
+                        "-t", str(new_dur),
+                        "-ar", str(sr), "-ac", "1", "-sample_fmt", "s16", part
+                    ], capture_output=True, check=True)
+                else:
+                    subprocess.run([
+                        "ffmpeg", "-y", "-i", in_path,
+                        "-ss", str(start), "-to", str(end),
+                        "-ar", str(sr), "-ac", "1", "-sample_fmt", "s16", part
+                    ], capture_output=True, check=True)
+                parts.append(part)
+
+            with open(concat_file, "w") as f:
+                for p in parts:
+                    p_formatted = p.replace('\\', '/')
+                    f.write(f"file '{p_formatted}'\n")
+
+            subprocess.run([
+                "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                "-i", concat_file,
+                "-ar", str(sr), "-ac", "1", "-sample_fmt", "s16", out_path
+            ], capture_output=True, check=True)
+            
+            out_audio, _ = sf.read(out_path)
+            if out_audio.ndim > 1:
+                out_audio = out_audio.mean(axis=1)
+            return out_audio.astype(np.float32)
+
+        finally:
+            for p in parts:
+                if os.path.exists(p):
+                    try: os.remove(p)
+                    except: pass
+            if os.path.exists(concat_file):
+                try: os.remove(concat_file)
+                except: pass
+
+    finally:
+        if os.path.exists(in_path):
+            try: os.remove(in_path)
+            except: pass
+        if os.path.exists(out_path):
+            try: os.remove(out_path)
+            except: pass
+
+
 def time_stretch_to_duration(audio: np.ndarray, sr: int, target_duration: float) -> np.ndarray:
     if len(audio) == 0 or target_duration <= 0:
         return audio
     current_duration = len(audio) / sr
     if current_duration <= 0:
         return audio
-    rate = current_duration / target_duration
-    if rate <= 0:
-        return audio
-    return librosa.effects.time_stretch(audio, rate=rate)
+        
+    try:
+        return _stretch_silences_ffmpeg(audio, sr, target_duration)
+    except Exception as e:
+        print(f"[WARN] Silence-stretching failed ({e}), falling back to librosa.")
+        rate = current_duration / target_duration
+        if rate <= 0:
+            return audio
+        return librosa.effects.time_stretch(audio, rate=rate)
 
 
 def overlay_audio(base: np.ndarray, overlay: np.ndarray, start_sample: int) -> np.ndarray:
