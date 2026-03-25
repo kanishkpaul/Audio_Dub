@@ -158,7 +158,7 @@ def load_whisper(model_id: str, device: str):
                 model_id, dtype=dtype, low_cpu_mem_usage=True, local_files_only=True,
             ).to(device).eval()
             print("Using cached Whisper files.")
-        except OSError:
+        except Exception:
             print(f"Downloading {model_id} from Hugging Face...")
             processor = AutoProcessor.from_pretrained(model_id)
             model = AutoModelForSpeechSeq2Seq.from_pretrained(
