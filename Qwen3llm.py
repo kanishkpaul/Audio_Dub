@@ -14,18 +14,41 @@ model = AutoModelForCausalLM.from_pretrained(
     device_map=_device,
 )
 
-def translate_fragment(text_fragment: str, target_language: str = "Chinese") -> str:
-    """Translate an incomplete sentence fragment without completing missing context."""
+def translate_fragment(
+    text_fragment: str,
+    target_language: str = "Chinese",
+    target_duration: float = None,
+    target_chars: int = None,
+) -> str:
+    """
+    Translate an incomplete sentence fragment without completing missing context.
+    
+    Args:
+        text_fragment: Text to translate
+        target_language: Target language (default: Chinese)
+        target_duration: Duration in seconds (for TTS timing awareness)
+        target_chars: Target character count for the translation
+    """
     print(f"[LLM] Translating fragment ({len(text_fragment)} chars) -> {target_language}")
+    if target_duration is not None:
+        print(f"[LLM] Target duration: {target_duration:.1f}s, target chars: {target_chars}")
 
-    style_rules = (
-        f"Translate to {target_language}. "
-        "Input may be an incomplete sentence fragment. "
+    # Build dynamic prompt with duration guidance
+    style_rules = f"Translate to {target_language}. Input may be an incomplete sentence fragment. "
+    
+    # Add duration-aware guidance if provided
+    if target_duration is not None and target_chars is not None:
+        style_rules += (
+            f"This segment is approximately {target_duration:.1f} seconds long. "
+            f"Aim for approximately {target_chars} Chinese characters to match speech timing. "
+        )
+    
+    style_rules += (
         "STRICT RULES:\n"
         "- Do NOT complete the sentence\n"
         "- Do NOT add new words not present in source\n"
-        "- Keep translation as short as possible\n"
-        "- Prefer natural spoken Chinese (for subtitles)\n"
+        "- Provide natural, complete translation (not compressed)\n"
+        "- Prefer natural spoken Chinese\n"
         "- Avoid overly formal words\n"
         "- Preserve fragment structure exactly\n"
         "- Match ending punctuation exactly (ellipsis, comma, dash, etc.)\n"

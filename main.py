@@ -131,7 +131,10 @@ def synthesize_speaker_segments(
 
         translated = seg.get("translated_text", "").strip()
         if not translated:
-            translated = translate_fragment(text, target_language)
+            # Calculate target duration and character count for duration-aware translation
+            target_duration = float(seg["end"] - seg["start"])
+            target_chars = int(target_duration * 5)  # ~5 chars/sec is reasonable for natural TTS
+            translated = translate_fragment(text, target_language, target_duration, target_chars)
         if not translated:
             continue
         print(f"[TTS] Segment {seg_idx}: {seg['start']:.2f}-{seg['end']:.2f}s")
