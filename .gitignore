@@ -26,3 +26,7 @@ cache/
 *.wav
 *.mp3
 *.json
+
+# Notebooks and images
+*.ipynb
+*.png
