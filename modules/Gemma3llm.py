@@ -49,11 +49,14 @@ def translate_fragment(
     )
 
     try:
+        # Instead of passing style_rules as a system_instruction, 
+        # prepend it to the contents for gemma-3 as it doesn't support system instructions yet.
+        full_prompt = f"Instructions:\n{style_rules}\n\nText to translate:\n{text_fragment}"
+
         response = client.models.generate_content(
             model='gemma-3-27b-it',
-            contents=[text_fragment],
+            contents=[full_prompt],
             config=types.GenerateContentConfig(
-                system_instruction=style_rules,
                 temperature=0.2,
             )
         )
