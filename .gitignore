@@ -29,6 +29,7 @@ cache/
 # Notebooks and images
 *.ipynb
 *.png
+!docs/*.png
 
 # Output files
 final_mix.wav

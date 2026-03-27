@@ -2,6 +2,8 @@
 
 An automated audio dubbing pipeline that translates movie audio from English to another language (e.g., Chinese) with natural speech synthesis. The system handles complex multi-speaker scenarios with speech overlap detection and intelligent audio mixing.
 
+![Movie Dubbing Pipeline](docs/Main.png)
+
 ## Project Overview
 
 This pipeline takes an input audio file, separates it into speaker tracks, detects overlapping speech, transcribes the content, translates it to a target language, generates dubbed audio using voice cloning, and finally mixes everything back together.
@@ -102,7 +104,6 @@ Generates dubbed audio in target language with voice cloning, performs time-stre
 ## Requirements
 
 - Python 3.11+
-- CUDA GPU recommended (can run on CPU, but slower)
 - HuggingFace API token (for pyannote/segmentation-3.0 model)
 
 ## Installation
@@ -155,43 +156,13 @@ The pipeline calculates target character counts based on expected TTS timing:
 - Skips if stretch rate exceeds 2.5x or falls below 0.4x (to avoid artifacts)
 - Intelligently preserves pauses to maintain naturalness
 
-### Multi-Track Mixing
-
-- Each speaker generates a separate dubbed track
-- Background music preserved and mixed at original volume levels
-- Global peak normalization to prevent clipping
-
 ## Limitations and Known Issues
 
 1. Time-stretch bounds (0.4x-2.5x) may cause audio gaps if exceeded
-2. Diarization errors propagate through the entire pipeline
-3. Voice reference audio quality impacts final TTS output
-4. Multi-speaker loudness balancing uses simple peak normalization
-5. Character density assumption (5 chars/sec) may vary by language
+2. Voice reference audio quality impacts final TTS output
+3. Character density assumption (5 chars/sec) may vary by language
 
-## Future Improvements
-
-- Implement output validation checks per pipeline step
-- Add sub-segment fallback for extreme time-stretching
-- Per-speaker loudness normalization
-- Diarization quality metrics
-- Support for more target languages with adapted character density ratios
-- Multi-language reference detection
-
-## Performance Metrics
-
-Typical processing time depends on:
-- Audio length
-- Number of speakers
-- Presence of overlapping speech
-- GPU availability
-
-Expected audio quality:
-- Natural speech pacing (90% of ideal character target reached)
-- Minimal artifacts from time-stretching (except extreme cases)
-- Good speaker voice preservation with reference audio cloning
-- Clean separation between speech and background music
 
 ## License
 
-See LICENSE file for details.
+See [LICENSE](LICENSE) file for details.
