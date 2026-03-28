@@ -1,4 +1,6 @@
-# Audio Dubbing Pipeline
+<h1 align="center">
+  <img src="docs/Icon.png" alt="Audio Dubbing Pipeline" width="150" align="center" /> Audio Dubbing Pipeline
+</h1>
 
 An automated audio dubbing pipeline that translates movie audio from English to another language (e.g., Chinese) with natural speech synthesis. The system handles complex multi-speaker scenarios with speech overlap detection and intelligent audio mixing.
 
